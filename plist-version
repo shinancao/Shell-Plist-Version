@@ -1,0 +1,150 @@
+#!/bin/bash
+#------------------------------------------------------
+# 功能：修改xcodeproj中某一渠道target的plist中CFBundleShortVersionString
+# 使用说明：
+#       修改指定target组的版本号
+#          plist-version -i <index of bundleId array> -v <version num>
+#       修改全部target的版本号
+#          plist-version -a -v <version num>
+#
+# 参数说明：	-a               指定修改全部target的版本号
+#           -s               展示配置在脚本中的target
+#           -h               查看命令的使用
+#           -v               指定的版本号
+#           -i               指定build id对应的索引
+#          
+# 作者：zn
+# 创建日期：2016年11月21日
+#------------------------------------------------------
+# 参数说明：
+#------------------------------------------------------
+
+#定义project名字
+projectName="XXXX.xcodeproj"
+
+#定义主target的bundle id，只要主target的就好！
+bundle_id_arr=("xxxx" "xxxx" "xxxx" "xxxx")
+
+arr_len=${#bundle_id_arr[@]}
+
+showAllBundleID(){
+
+	for (( i = 0; i < $arr_len; i++ )); do
+		echo "$i: ${bundle_id_arr[$i]}"
+	done
+}
+
+usage(){
+	echo "Usage: plist-version -i <index of bundleId array> -v <version num>"
+	echo "       plist-version -a -version <version num>"
+	echo ""
+	echo "Options:"
+	echo "    -h                  print usage"
+	echo "    -s                  show the bundle id list in this script"
+	echo "    -a                  modify all target version"
+	echo "    -i                  modify specialed target with the index" 
+	echo "    -v                  the version number that you want to modify"
+}
+
+#对输入参数进行处理
+param_pattern="shi:av:-:"
+while getopts $param_pattern opt; do
+	case $opt in
+		s)
+			showAllBundleID
+			exit 0
+			;;
+		h)
+			usage
+			exit 0
+			;;
+		i)
+			tmp_optind=$OPTIND
+			tmp_optname=$opt
+			tmp_optarg=$OPTARG
+
+			OPTIND=$OPTIND-1
+
+			if getopts $param_pattern opt; then
+				echo  "Error argument value for option $tmp_optname"
+				exit 2
+			fi
+			OPTIND=$tmp_optind
+
+			sel_bundle_id=${bundle_id_arr[$tmp_optarg]}
+			matchstr=$sel_bundle_id"."
+
+			flag=0
+			for (( i = 0; i < $arr_len; i++ )); do
+				if [[ $tmp_optarg == $i ]]; then
+					flag=1
+					echo -e "\033[32m$i: ${bundle_id_arr[$i]}\033[0m"
+				else
+					echo "$i: ${bundle_id_arr[$i]}"
+				fi
+				
+			done
+
+			#对输入参数的判断
+			if [[ $flag == 0 ]]; then
+				echo -e "\033[31mPlease enter a number between 0 and $((arr_len - 1)).\033[0m"
+				exit 2
+			fi
+			;;
+		a)
+			is_set_all=y
+			;;
+		v)
+			tmp_optind=$OPTIND
+			tmp_optname=$opt
+			tmp_optarg=$OPTARG
+
+			OPTIND=$OPTIND-1
+			if getopts $param_pattern opt; then
+				echo  "Error argument value for option $tmp_optname"
+				exit 2
+			fi
+			OPTIND=$tmp_optind
+
+			version=$tmp_optarg
+			;;
+		\?)
+			usage
+			exit 1
+			;;
+	esac
+
+done
+
+echo -e "\033[32mGet plist path...Please ignore the warnings~\033[0m"
+
+path="$(xcodebuild -project $projectName -alltargets -showBuildSettings | grep -E "PRODUCT_SETTINGS_PATH|PRODUCT_BUNDLE_IDENTIFIER")"
+
+OLD_IFS="$IFS" 
+IFS=$'\n' 
+path_arr=($path)
+
+len=`expr ${#path_arr[@]} / 2 - 1` #因为开头第一组bundle id和plist path会在最后重复出现一次
+
+for (( i = 0; i < $len; i++ )); do
+ 	bundle_id_index=`expr $i \* 2`
+ 	substr="    PRODUCT_BUNDLE_IDENTIFIER = "
+ 	str=${path_arr[$bundle_id_index]}
+ 	bundle_id=${str#$substr}
+
+ 	if [[ $is_set_all = "y" ]] || [[ $bundle_id == *$matchstr* ]] || [[ $bundle_id == $sel_bundle_id ]]; then
+ 		plist_index=`expr $i \* 2 + 1`
+ 		substr="    PRODUCT_SETTINGS_PATH = "
+ 		str=${path_arr[$plist_index]}
+ 		plist=${str#$substr}
+
+ 		#修改version
+		/usr/libexec/PlistBuddy -c "set CFBundleShortVersionString $version" "$plist"
+
+		#给用户提示已修改完成
+		tip="$bundle_id now is $version"
+		echo -e "\033[32m${tip}\033[0m"
+ 	fi
+ done 
+
+IFS="$OLD_IFS"
