@@ -23,4 +23,4 @@
           -i               指定build id对应的索引
 ```
 
-*脚本的实现思路：<http://shinancao.github.io/2017/01/28/Script-Plist-Version/>*
+*脚本的实现思路：<http://www.shinancao.cn/2017/07/16/Project-Design-4/>*
